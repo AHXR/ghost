@@ -6,7 +6,7 @@
 
 ---
 
-**ghost** is a light [http://searchsecurity.techtarget.com/definition/RAT-remote-access-Trojan](RAT) that gives the server/attacker full remote access to the user's command-line interpreter (cmd.exe).
+**ghost** is a light [RAT](http://searchsecurity.techtarget.com/definition/RAT-remote-access-Trojan) that gives the server/attacker full remote access to the user's command-line interpreter (cmd.exe).
 They are allowed to execute commands silently without the client/zombie noticing. The server/attacker is also given the ability to download and execute files on the client/zombie's computer. This is also
 a silent and hidden process. Like most Remote Access Trojans, this download and execution ability helps distribute viruses and other pieces of malware.
 
