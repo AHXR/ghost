@@ -28,3 +28,5 @@ When starting the server, it will prompt for you a listening port. This is the p
 provided and the menu will be down. The IP address provided is your external IP. With that being said, unless the client/zombie is actively looking and tracking open connections, it will probably be 
 smart to run this server under a remote location if you want to stay anonymous. If this does not interest you, simply renaming zombie.exe and/or changing the assembly information using a tool will 
 likely fool the client/zombie.
+
+**Note**: This project was only made for education purposes and to test out my recently published repositories ([ahxrlogger](https://github.com/AHXR/ahxrlogger) & [ahxrsocket](https://github.com/AHXR/ahxrwinsocket)). If you choose to use this for malicious reasons, you are completely responsible for the outcome.
