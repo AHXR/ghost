@@ -1,3 +1,8 @@
+1.0.3 (12/17/2017)
+
+- Fixed zombie not responding to commands
+- IRC is now encrypted (substitution cipher)
+
 1.0.2 (12/12/2017)
 
 - Fixed repeated commands
