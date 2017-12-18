@@ -1,4 +1,11 @@
-1.0.3 (12/17/2017)
+1.0.3b (12/17/2017)
+
+- Refresh crashing fixed
+- Zombie's version of ghost now shown
+- Now starts up in Safe Mode. (Administrator Privileges Required)
+- Hidden from startup checkers such as CCleaner and msconfig (Administrator Privileges Required)
+
+1.0.3a (12/17/2017)
 
 - Fixed zombie not responding to commands
 - IRC is now encrypted (substitution cipher)

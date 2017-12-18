@@ -17,6 +17,19 @@ is provided, the program doesn't run. With that being said, make sure you provid
 zombie.exe 127.0.0.1 27015
 ```
 
+### Bot Features
+
+- Remote command execution 
+- Silent background process
+- Download and run file (Hidden)
+- Safe Mode startup
+- Will automatically connect to the server
+- Data sent and received is encrypted (substitution cipher)
+- Files are hidden
+- Installed Antivirus shown to server
+- Easily spread malware through download feature
+- Startup info doesn't show in msconfig or other startup checking programs like CCleaner
+
 When successfully started, it adds itself to the start-up pool and runs silently in the background. It will try to repeatedly connect to the server. This process does not hog any memory or CPU usage.
 This means that the zombie will silently just idle in the background and whenever the server is up, it will automatically connect.
 
