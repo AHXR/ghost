@@ -29,6 +29,7 @@ zombie.exe 127.0.0.1 27015
 - Installed Antivirus shown to server
 - Easily spread malware through download feature
 - Startup info doesn't show in msconfig or other startup checking programs like CCleaner
+- Disable Task Manager
 
 ---
 

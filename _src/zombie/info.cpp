@@ -4,7 +4,7 @@
 	@author
 		AHXR (https://github.com/AHXR)
 	@copyright
-		2017
+		2018
 
 	ghost is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
@@ -20,13 +20,14 @@
 	along with ghost.  If not, see <http://www.gnu.org/licenses/>.
 */
 //=======================================================
-#include					<string>
 #include					<Windows.h>
 #include					<wbemidl.h>
 #include					<iostream>
 #include					<conio.h>
 #include					<comdef.h>
 #include					<wininet.h>
+#include					<TlHelp32.h>
+#include					<string>
 #include					"info.h"
 
 #pragma comment				(lib, "wbemuuid.lib")
@@ -141,4 +142,29 @@ std::string real_ip() {
 	InternetCloseHandle(net);
 
 	return std::string(buffer, read);
+}
+
+DWORD FindProcessId(const std::wstring & processName) {
+	PROCESSENTRY32W processInfo;
+	processInfo.dwSize = sizeof(processInfo);
+
+	HANDLE processesSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, NULL);
+	if (processesSnapshot == INVALID_HANDLE_VALUE)
+		return 0;
+
+	Process32FirstW(processesSnapshot, &processInfo);
+	if (!processName.compare(processInfo.szExeFile)) {
+		CloseHandle(processesSnapshot);
+		return processInfo.th32ProcessID;
+	}
+
+	while (Process32NextW(processesSnapshot, &processInfo)) {
+		if (!processName.compare(processInfo.szExeFile)) {
+			CloseHandle(processesSnapshot);
+			return processInfo.th32ProcessID;
+		}
+	}
+
+	CloseHandle(processesSnapshot);
+	return 0;
 }

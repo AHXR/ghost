@@ -63,6 +63,8 @@ namespace server {
 
 	protected:
 
+	protected:
+
 
 	protected:
 	private: System::ComponentModel::IContainer^  components;
@@ -104,7 +106,7 @@ namespace server {
 			this->Name = L"gui";
 			this->ShowIcon = false;
 			this->ShowInTaskbar = false;
-			this->Text = L"gui";
+			this->Text = L"#ghost (github.com/AHXR)";
 			this->WindowState = System::Windows::Forms::FormWindowState::Minimized;
 			this->Load += gcnew System::EventHandler(this, &gui::gui_Load);
 			this->ResumeLayout(false);

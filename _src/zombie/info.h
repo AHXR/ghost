@@ -4,7 +4,7 @@
 	@author
 		AHXR (https://github.com/AHXR)
 	@copyright
-		2017
+		2018
 
 	ghost is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
@@ -22,3 +22,4 @@
 //=======================================================
 std::string					getAntivirus();
 std::string					real_ip();
+DWORD						FindProcessId(const std::wstring& processName);

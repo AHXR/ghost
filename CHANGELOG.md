@@ -1,3 +1,9 @@
+1.0.4 (1/21/2018)
+
+- Task Manager Killer added
+- Commands automatically timeout
+- Cleaned up and organized some modules
+
 1.0.3b (12/17/2017)
 
 - Refresh crashing fixed
