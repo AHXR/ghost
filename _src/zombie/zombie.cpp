@@ -23,7 +23,7 @@
 #define						GHOSTVER						"1.0.3b"
 #define						DEFAULT_BUFF					19056
 #define						TMPLOG							"svchost.log"
-#define					GHOST_HIDE						/* DEBUG */
+//#define					GHOST_HIDE						/* DEBUG */
 //#define					AHXRLOGGER_PLUGIN				// https://github.com/AHXR/ahxrlogger
 
 // 64-bit automatically redirected to "HKLM\SOFTWARE\Wow6432Node"
